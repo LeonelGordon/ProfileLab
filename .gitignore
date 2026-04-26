@@ -1,0 +1,56 @@
+.env
+
+# Variantes locales de entorno
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+venv/
+.venv/
+ENV/
+env/
+
+# Build / empaquetado
+build/
+dist/
+*.egg-info/
+
+# Cachés de tests / tipado / lint
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Streamlit (secretos locales)
+.streamlit/secrets.toml
+
+# SO / IDE
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
+
+# Logs / temporales
+*.log
+*.tmp
+tmp/
+
+# Cachés 
+.cache/
+**/.cache/
+cache/
+**/models/
+
+# Caché local típico de sentence-transformers 
+sentence_transformers/

@@ -1,0 +1,1 @@
+from .cv_parser import extract_cv_text

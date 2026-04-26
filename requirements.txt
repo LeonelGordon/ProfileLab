@@ -1,0 +1,11 @@
+langchain
+langchain-groq
+langchain-openai
+langgraph
+pydantic
+python-dotenv
+streamlit
+sentence-transformers
+numpy
+pypdf
+python-docx
