@@ -42,7 +42,7 @@ Componentes principales:
 - Backend: Python
 - Orquestación: LangGraph
 - Agentes especializados
-- RAG Retriever + Knowledge Base (LinkedIn Best Practices)
+- RAG Retriever + Knowledge Base (Markdown en `data/`, vectores persistentes con Chroma)
 - Abstracción de LLM (OpenAI / Groq)
 - Validación estructurada con Pydantic
 - Logging por etapa
@@ -101,13 +101,15 @@ Tipo: recuperación
 
 Responsabilidad:
 
-- Buscar chunks relevantes
+- Buscar chunks relevantes (similitud coseno con Sentence Transformers)
 - Inyectar buenas prácticas externas
 - Reducir respuestas genéricas
 
-Fuente:
+Implementación:
 
-- Knowledge Base de LinkedIn SEO
+- Módulo `app/rag/chroma_rag.py`: Chroma como base vectorial **local en disco** (`vector_store/chroma/`, ignorada por git)
+- Misma lógica que antes (chunking + embeddings + top-k), con **persistencia**: los embeddings no se recalculan si el contenido del archivo no cambió (sync por hash SHA-256)
+- Corpus: todos los archivos **`data/**/*.md`** (por ejemplo `data/linkedin_best_practices.md` y cualquier otro `.md` que agregues)
 
 ---
 
@@ -214,6 +216,7 @@ Beneficios:
 - Groq API  
 - Pydantic  
 - Sentence Transformers (embeddings para RAG)  
+- ChromaDB (vector store local persistente)  
 - PyPDF / python-docx (extracción de CV)  
 
 ---
@@ -248,6 +251,8 @@ streamlit run streamlit_app.py
 
 **CLI de ejemplo:** también podés ejecutar `python main.py` (usa rutas y valores de demo definidos en ese archivo).
 
+**RAG / Chroma:** la primera ejecución crea `vector_store/chroma/` e indexa los `.md` de `data/`. Si editás o agregás Markdown, en la próxima corrida solo se re-embeddean los archivos que cambiaron. Para forzar un reindex completo, borrá la carpeta `vector_store/`.
+
 ---
 
 ## Resultado
@@ -265,8 +270,8 @@ El output es accionable y orientado a visibilidad frente a recruiters.
 
 ## Limitaciones
 
-- RAG con embeddings en memoria (sin vector DB persistente); la primera ejecución puede descargar el modelo de embeddings  
-- Knowledge base estática (`data/linkedin_best_practices.md`)  
+- La primera ejecución puede descargar el modelo de embeddings (Sentence Transformers)  
+- Knowledge base basada en Markdown estático bajo `data/` (archivos `.md`)  
 - Sin métricas automáticas  
 - Dependencia del CV de entrada  
 - Sin persistencia de resultados  
@@ -277,8 +282,7 @@ El output es accionable y orientado a visibilidad frente a recruiters.
 ## Oportunidades de mejora
 
 - Capa conversacional (chat iterativo)  
-- Persistencia de resultados  
-- Vector DB (FAISS / Pinecone)  
+- Persistencia de resultados (outputs de la app)  
 - Métricas de calidad  
 - Feedback loop  
 - Versionado de outputs  

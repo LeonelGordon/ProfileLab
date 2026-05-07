@@ -1,2 +1,3 @@
-from .loader import load_and_chunk_markdown as load_markdown_chunks
-from .retriever import SimpleRetriever as Retriever
+from .chroma_rag import get_persistent_chroma_rag
+
+__all__ = ["get_persistent_chroma_rag"]

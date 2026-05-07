@@ -6,6 +6,7 @@ pydantic
 python-dotenv
 streamlit
 sentence-transformers
+chromadb
 numpy
 pypdf
 python-docx

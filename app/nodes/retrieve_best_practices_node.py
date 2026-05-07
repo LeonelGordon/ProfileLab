@@ -1,4 +1,4 @@
-from app.rag import Retriever, load_markdown_chunks
+from app.rag import get_persistent_chroma_rag
 
 
 def retrieve_best_practices_node(state):
@@ -19,9 +19,8 @@ def retrieve_best_practices_node(state):
         - content strategy
         """
 
-        chunks = load_markdown_chunks("data/linkedin_best_practices.md")
-        retriever = Retriever(chunks=chunks)
-        retrieved_chunks = retriever.retrieve(query=query, top_k=3)
+        rag = get_persistent_chroma_rag()
+        retrieved_chunks = rag.retrieve(query=query, top_k=3)
 
         logs = state.get("logs", [])
         logs.append("[retrieve_best_practices] OK: recuperación RAG completada.")

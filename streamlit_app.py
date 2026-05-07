@@ -19,13 +19,18 @@ PROGRESS_STEPS = [
     ("generate_linkedin_profile", "04", "Strategist", "Generando optimización final."),
 ]
 
+REFINE_PROGRESS_STEPS = [
+    ("output_refiner", "01", "Refinar output", "Aplicando tu feedback con el agente de refinamiento."),
+]
 
-def render_progress(placeholder, completed, active, errors=None):
+
+def render_progress(placeholder, completed, active, errors=None, steps=None):
     errors = errors or {}
+    steps = steps or PROGRESS_STEPS
     first_error_seen = False
     rows = []
 
-    for key, num, title, desc in PROGRESS_STEPS:
+    for key, num, title, desc in steps:
         err_msg = errors.get(key)
         error_html = ""
 
@@ -65,16 +70,8 @@ def render_progress(placeholder, completed, active, errors=None):
     )
 
 
-def run_profilelab_stream(cv_file_path: str, target_role: str, provider: str, on_node_done):
+def run_graph_stream(initial_state: dict, on_node_done):
     graph = build_graph()
-
-    initial_state = {
-        "cv_file_path": cv_file_path,
-        "target_role": target_role,
-        "provider": provider,
-        "logs": [],
-    }
-
     accumulated = dict(initial_state)
 
     for event in graph.stream(initial_state, stream_mode="updates"):
@@ -86,6 +83,73 @@ def run_profilelab_stream(cv_file_path: str, target_role: str, provider: str, on
             on_node_done(node_name, node_error)
 
     return accumulated
+
+
+def run_profilelab_stream(cv_file_path: str, target_role: str, provider: str, on_node_done):
+    initial_state = {
+        "cv_file_path": cv_file_path,
+        "target_role": target_role,
+        "provider": provider,
+        "logs": [],
+    }
+    return run_graph_stream(initial_state, on_node_done)
+
+
+def build_linkedin_output_blocks_html(output) -> str:
+    """Genera el HTML de bloques de resultado; acepta LinkedInOutput o dict."""
+    if output is None:
+        return ""
+
+    if hasattr(output, "headline"):
+        headline = safe_text(getattr(output, "headline", ""))
+        about = safe_text(getattr(output, "about", "")).replace("\n", "<br>")
+        suggested_skills = getattr(output, "suggested_skills", []) or []
+        seo_recommendations = getattr(output, "seo_recommendations", []) or []
+        content_recommendations = getattr(output, "content_recommendations", []) or []
+    else:
+        headline = safe_text(output.get("headline", ""))
+        about = safe_text(output.get("about", "")).replace("\n", "<br>")
+        suggested_skills = output.get("suggested_skills") or []
+        seo_recommendations = output.get("seo_recommendations") or []
+        content_recommendations = output.get("content_recommendations") or []
+
+    skills_html = "".join(
+        f"<div class='list-item'>• {safe_text(skill)}</div>"
+        for skill in suggested_skills
+    ) or "<div class='list-item'>—</div>"
+
+    seo_html = "".join(
+        f"<div class='list-item'>• {safe_text(item)}</div>"
+        for item in seo_recommendations
+    ) or "<div class='list-item'>—</div>"
+
+    content_html = "".join(
+        f"<div class='list-item'>• {safe_text(item)}</div>"
+        for item in content_recommendations
+    ) or "<div class='list-item'>—</div>"
+
+    return (
+        f'<div class="result-block">'
+        f'<div class="result-label">Headline</div>'
+        f'<div class="result-value">{headline}</div>'
+        f"</div>"
+        f'<div class="result-block">'
+        f'<div class="result-label">About</div>'
+        f'<div class="result-value">{about}</div>'
+        f"</div>"
+        f'<div class="result-block">'
+        f'<div class="result-label">Skills sugeridas</div>'
+        f'<div class="result-value">{skills_html}</div>'
+        f"</div>"
+        f'<div class="result-block">'
+        f'<div class="result-label">Recomendaciones SEO</div>'
+        f'<div class="result-value">{seo_html}</div>'
+        f"</div>"
+        f'<div class="result-block">'
+        f'<div class="result-label">Ideas de contenido</div>'
+        f'<div class="result-value">{content_html}</div>'
+        f"</div>"
+    )
 
 
 def safe_text(value):
@@ -876,6 +940,9 @@ if run_button:
     elif not target_role.strip():
         st.error("Ingresá un rol objetivo.")
     else:
+        st.session_state.pop("pl_refined_output", None)
+        st.session_state["pl_iteration_history"] = []
+
         suffix = os.path.splitext(uploaded_file.name)[1]
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -902,6 +969,7 @@ if run_button:
             completed,
             PROGRESS_STEPS[0][0],
             errors,
+            steps=PROGRESS_STEPS,
         )
 
         def _on_node_done(node_name, node_error=None):
@@ -914,7 +982,9 @@ if run_button:
                     error_scrolled["value"] = True
             remaining = [s[0] for s in PROGRESS_STEPS if s[0] not in completed]
             active = remaining[0] if remaining else None
-            render_progress(progress_placeholder, completed, active, errors)
+            render_progress(
+                progress_placeholder, completed, active, errors, steps=PROGRESS_STEPS
+            )
 
         try:
             result = run_profilelab_stream(
@@ -930,121 +1000,292 @@ if run_button:
                 if not error_scrolled["value"]:
                     scroll_to_anchor("trace-logs-anchor", delay_ms=200)
                     error_scrolled["value"] = True
-            render_progress(progress_placeholder, completed, None, errors)
+            render_progress(
+                progress_placeholder, completed, None, errors, steps=PROGRESS_STEPS
+            )
             st.stop()
 
-        render_progress(progress_placeholder, completed, None, errors)
+        render_progress(progress_placeholder, completed, None, errors, steps=PROGRESS_STEPS)
 
-        output = result.get("linkedin_output")
-        logs = result.get("logs", [])
-        chunks = result.get("retrieved_chunks", [])
-
-        if output:
-            headline = safe_text(getattr(output, "headline", ""))
-            about = safe_text(getattr(output, "about", "")).replace("\n", "<br>")
-
-            suggested_skills = getattr(output, "suggested_skills", []) or []
-            seo_recommendations = getattr(output, "seo_recommendations", []) or []
-            content_recommendations = getattr(output, "content_recommendations", []) or []
-
-            skills_html = "".join(
-                f"<div class='list-item'>• {safe_text(skill)}</div>"
-                for skill in suggested_skills
-            ) or "<div class='list-item'>—</div>"
-
-            seo_html = "".join(
-                f"<div class='list-item'>• {safe_text(item)}</div>"
-                for item in seo_recommendations
-            ) or "<div class='list-item'>—</div>"
-
-            content_html = "".join(
-                f"<div class='list-item'>• {safe_text(item)}</div>"
-                for item in content_recommendations
-            ) or "<div class='list-item'>—</div>"
-
-            st.markdown(
-'<div id="result-anchor" class="scroll-anchor"></div>'
-'<div class="result-section">'
-'<div class="section-title">Resultado generado</div>'
-'<div class="section-caption">Resultado generado a partir del análisis multi-agente del perfil y contexto externo.</div>'
-'</div>',
-                unsafe_allow_html=True,
+        if result.get("error"):
+            st.error(
+                "El pipeline terminó con error. Revisá la trazabilidad más abajo si hay resultados parciales."
             )
 
-            scroll_to_anchor("result-anchor", delay_ms=400)
+        # Persistimos el estado de progreso para que no desaparezca en reruns
+        # (por ejemplo, cuando el usuario refina el output).
+        st.session_state["pl_last_progress"] = {
+            "completed": sorted(list(completed)),
+            "errors": dict(errors),
+        }
 
+        if result.get("linkedin_output") and not result.get("error"):
+            st.session_state["pl_linkedin_output"] = result.get("linkedin_output")
+            st.session_state["pl_refined_output"] = result.get("refined_output")
+            st.session_state["pl_profile_analysis"] = result.get("profile_analysis")
+            st.session_state["pl_target_role"] = target_role.strip()
+            st.session_state["pl_provider"] = provider
+            st.session_state["pl_iteration_history"] = list(
+                result.get("iteration_history") or []
+            )
+            st.session_state["pl_logs"] = result.get("logs", [])
+            st.session_state["pl_chunks"] = result.get("retrieved_chunks", [])
+
+if st.session_state.get("pl_last_progress") and not run_button:
+    last = st.session_state["pl_last_progress"] or {}
+    st.markdown(
+        '<div class="result-section">'
+        '<div class="section-title">Progreso (última ejecución)</div>'
+        '<div class="section-caption">Se mantiene visible mientras refinás el output.</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    prog_placeholder = st.empty()
+    render_progress(
+        prog_placeholder,
+        set(last.get("completed") or []),
+        None,
+        last.get("errors") or {},
+        steps=PROGRESS_STEPS,
+    )
+
+if st.session_state.get("pl_linkedin_output"):
+    pl_provider = st.session_state.get("pl_provider", provider)
+    pl_target = st.session_state.get("pl_target_role", target_role or "")
+    pl_logs = st.session_state.get("pl_logs", [])
+    pl_chunks = st.session_state.get("pl_chunks", [])
+    linkedin_initial = st.session_state["pl_linkedin_output"]
+    refined = st.session_state.get("pl_refined_output")
+    current_output = refined if refined is not None else linkedin_initial
+    hist = st.session_state.get("pl_iteration_history") or []
+
+    st.markdown(
+        '<div id="result-anchor" class="scroll-anchor"></div>'
+        '<div class="result-section">'
+        '<div class="section-title">Resultado actual</div>'
+        '<div class="section-caption">Versión vigente (refinada si aplicaste feedback). Generada a partir del análisis multi-agente y contexto RAG.</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.pop("pl_scroll_to_result", False):
+        scroll_to_anchor("result-anchor", delay_ms=450)
+
+    if st.session_state.pop("pl_refine_success", False):
+        st.success("Listo: refinamiento aplicado.")
+
+    st.markdown(
+        build_linkedin_output_blocks_html(current_output),
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Historial de versiones", expanded=False):
+        st.caption("Versión inicial: salida del Strategist. Las siguientes entradas son refinamientos.")
+        with st.expander("Versión inicial (Strategist)", expanded=False):
             st.markdown(
-f'<div class="result-block">'
-f'<div class="result-label">Headline</div>'
-f'<div class="result-value">{headline}</div>'
-f'</div>'
-f'<div class="result-block">'
-f'<div class="result-label">About</div>'
-f'<div class="result-value">{about}</div>'
-f'</div>'
-f'<div class="result-block">'
-f'<div class="result-label">Skills sugeridas</div>'
-f'<div class="result-value">{skills_html}</div>'
-f'</div>'
-f'<div class="result-block">'
-f'<div class="result-label">Recomendaciones SEO</div>'
-f'<div class="result-value">{seo_html}</div>'
-f'</div>'
-f'<div class="result-block">'
-f'<div class="result-label">Ideas de contenido</div>'
-f'<div class="result-value">{content_html}</div>'
-f'</div>',
+                build_linkedin_output_blocks_html(linkedin_initial),
                 unsafe_allow_html=True,
             )
+        for i, entry in enumerate(hist, start=1):
+            fb_full = entry.get("user_feedback") or ""
+            fb_preview = fb_full[:100]
+            label = f"Versión {i} (refinado)"
+            if fb_preview:
+                suffix = "…" if len(fb_full) > 100 else ""
+                label += f" — {fb_preview}{suffix}"
+            with st.expander(label, expanded=False):
+                st.markdown(
+                    build_linkedin_output_blocks_html(entry.get("refined_output")),
+                    unsafe_allow_html=True,
+                )
 
-        st.markdown(
-'<div id="trace-anchor" class="scroll-anchor"></div>'
-'<div class="result-section">'
-'<div class="section-title">Métricas y trazabilidad</div>'
-'<div class="section-caption">Información técnica usada para validar ejecución, observabilidad y recuperación de contexto.</div>'
-'</div>',
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        '<div class="result-section">'
+        '<div class="section-title">Refinar con feedback</div>'
+        '<div class="section-caption">Describí cambios concretos (tono, menos técnico, más keywords, etc.). Se ejecuta solo el nodo de refinamiento, sin re-procesar el CV.</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-        st.markdown(
-f'<div class="metrics-grid">'
-f'<div class="metric-card">'
-f'<div class="metric-label">Provider</div>'
-f'<div class="metric-value">{safe_text(provider)}</div>'
-f'</div>'
-f'<div class="metric-card">'
-f'<div class="metric-label">Rol objetivo</div>'
-f'<div class="metric-value">{safe_text(target_role.strip())}</div>'
-f'</div>'
-f'<div class="metric-card">'
-f'<div class="metric-label">Chunks RAG</div>'
-f'<div class="metric-value">{len(chunks)}</div>'
-f'</div>'
-f'<div class="metric-card">'
-f'<div class="metric-label">Logs</div>'
-f'<div class="metric-value">{len(logs)}</div>'
-f'</div>'
-f'</div>'
-'<div class="section-gap"></div>',
-            unsafe_allow_html=True,
-        )
+    # Streamlit no permite modificar session_state de un widget luego de instanciarlo.
+    # Usamos un flag para limpiar el textarea en el siguiente rerun.
+    if st.session_state.pop("pl_clear_feedback", False):
+        st.session_state["pl_feedback_text"] = ""
 
-        st.markdown('<div id="trace-logs-anchor" class="scroll-anchor"></div>', unsafe_allow_html=True)
+    last_refine = st.session_state.get("pl_last_refine_progress") or None
+    if last_refine:
+        with st.expander("Último refinamiento (estado)", expanded=False):
+            rp = st.empty()
+            render_progress(
+                rp,
+                set(last_refine.get("completed") or []),
+                None,
+                last_refine.get("errors") or {},
+                steps=REFINE_PROGRESS_STEPS,
+            )
 
-        with st.expander("Ver trazabilidad del flujo", expanded=bool(errors)):
-            if logs:
-                for visible_line in _render_visible_log_lines(logs):
-                    st.write(visible_line)
+    feedback_text = st.text_area(
+        "Feedback",
+        key="pl_feedback_text",
+        height=120,
+        placeholder="Ej.: Hacé el about menos técnico y más orientado a impacto de negocio.",
+    )
+
+    refine_clicked = st.button("Aplicar feedback", type="primary", key="pl_refine_btn")
+
+    if refine_clicked:
+        if not st.session_state.get("pl_profile_analysis"):
+            st.error("No hay análisis de perfil en sesión. Volvé a ejecutar «Optimizar mi perfil».")
+        elif not (feedback_text or "").strip():
+            st.warning("Escribí feedback antes de aplicar.")
+        else:
+            refine_placeholder = st.empty()
+            r_completed = set()
+            r_errors = {}
+            r_error_scrolled = {"value": False}
+            render_progress(
+                refine_placeholder,
+                r_completed,
+                REFINE_PROGRESS_STEPS[0][0],
+                r_errors,
+                steps=REFINE_PROGRESS_STEPS,
+            )
+
+            def _on_refine_done(node_name, node_error=None):
+                r_completed.add(node_name)
+                if node_error:
+                    r_errors[node_name] = (
+                        "Ocurrió un error. Revisá la trazabilidad del flujo."
+                    )
+                    if not r_error_scrolled["value"]:
+                        scroll_to_anchor("trace-logs-anchor", delay_ms=200)
+                        r_error_scrolled["value"] = True
+                remaining = [
+                    s[0] for s in REFINE_PROGRESS_STEPS if s[0] not in r_completed
+                ]
+                active = remaining[0] if remaining else None
+                render_progress(
+                    refine_placeholder,
+                    r_completed,
+                    active,
+                    r_errors,
+                    steps=REFINE_PROGRESS_STEPS,
+                )
+
+            refine_state = {
+                "refine_only": True,
+                "user_feedback": feedback_text.strip(),
+                "linkedin_output": st.session_state["pl_linkedin_output"],
+                "refined_output": st.session_state.get("pl_refined_output"),
+                "profile_analysis": st.session_state["pl_profile_analysis"],
+                "target_role": (target_role or "").strip() or pl_target,
+                "provider": provider,
+                "logs": list(st.session_state.get("pl_logs", [])),
+                "iteration_history": list(
+                    st.session_state.get("pl_iteration_history", [])
+                ),
+            }
+
+            try:
+                refine_result = run_graph_stream(refine_state, _on_refine_done)
+            except Exception as exc:  # noqa: BLE001
+                r_errors[REFINE_PROGRESS_STEPS[0][0]] = (
+                    "Ocurrió un error. Revisá la trazabilidad del flujo."
+                )
+                render_progress(
+                    refine_placeholder,
+                    r_completed,
+                    None,
+                    r_errors,
+                    steps=REFINE_PROGRESS_STEPS,
+                )
+                st.error(str(exc))
             else:
-                st.write("No se registraron logs.")
+                render_progress(
+                    refine_placeholder,
+                    r_completed,
+                    None,
+                    r_errors,
+                    steps=REFINE_PROGRESS_STEPS,
+                )
+                if refine_result.get("error"):
+                    st.error(
+                        "No se pudo refinar el output. Revisá la trazabilidad del flujo."
+                    )
+                    st.session_state["pl_last_refine_progress"] = {
+                        "completed": sorted(list(r_completed)),
+                        "errors": dict(r_errors),
+                    }
+                else:
+                    st.session_state["pl_refined_output"] = refine_result.get(
+                        "refined_output"
+                    )
+                    st.session_state["pl_iteration_history"] = list(
+                        refine_result.get("iteration_history") or []
+                    )
+                    st.session_state["pl_logs"] = refine_result.get("logs", [])
+                    st.session_state["pl_last_refine_progress"] = {
+                        "completed": ["output_refiner"],
+                        "errors": {},
+                    }
+                    # Limpiamos el textarea y forzamos rerun para que el "Resultado actual"
+                    # (que se renderiza arriba) se actualice inmediatamente.
+                    st.session_state["pl_clear_feedback"] = True
+                    st.session_state["pl_scroll_to_result"] = True
+                    st.session_state["pl_refine_success"] = True
+                    st.rerun()
 
-        with st.expander("Ver contexto RAG utilizado"):
-            if chunks:
-                for i, chunk in enumerate(chunks, start=1):
-                    st.markdown(f"**Chunk {i}**")
-                    st.write(chunk)
-            else:
-                st.write("No se recuperó contexto RAG.")
+    st.markdown(
+        '<div id="trace-anchor" class="scroll-anchor"></div>'
+        '<div class="result-section">'
+        '<div class="section-title">Métricas y trazabilidad</div>'
+        '<div class="section-caption">Información técnica usada para validar ejecución, observabilidad y recuperación de contexto.</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f'<div class="metrics-grid">'
+        f'<div class="metric-card">'
+        f'<div class="metric-label">Provider</div>'
+        f'<div class="metric-value">{safe_text(pl_provider)}</div>'
+        f"</div>"
+        f'<div class="metric-card">'
+        f'<div class="metric-label">Rol objetivo</div>'
+        f'<div class="metric-value">{safe_text(pl_target)}</div>'
+        f"</div>"
+        f'<div class="metric-card">'
+        f'<div class="metric-label">Chunks RAG</div>'
+        f'<div class="metric-value">{len(pl_chunks)}</div>'
+        f"</div>"
+        f'<div class="metric-card">'
+        f'<div class="metric-label">Logs</div>'
+        f'<div class="metric-value">{len(pl_logs)}</div>'
+        f"</div>"
+        f"</div>"
+        '<div class="section-gap"></div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div id="trace-logs-anchor" class="scroll-anchor"></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Ver trazabilidad del flujo", expanded=False):
+        if pl_logs:
+            for visible_line in _render_visible_log_lines(pl_logs):
+                st.write(visible_line)
+        else:
+            st.write("No se registraron logs.")
+
+    with st.expander("Ver contexto RAG utilizado"):
+        if pl_chunks:
+            for i, chunk in enumerate(pl_chunks, start=1):
+                st.markdown(f"**Chunk {i}**")
+                st.write(chunk)
+        else:
+            st.write("No se recuperó contexto RAG.")
 
 
 st.markdown(

@@ -46,6 +46,9 @@ Desktop.ini
 *.tmp
 tmp/
 
+# Vector store local (Chroma)
+vector_store/
+
 # Cachés 
 .cache/
 **/.cache/

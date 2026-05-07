@@ -1,4 +1,4 @@
-from typing import List, Optional, TypedDict
+from typing import Any, List, Optional, TypedDict
 
 from app.schemas import LinkedInOutput, ProfileAnalysis
 
@@ -18,6 +18,12 @@ class ProfileLabState(TypedDict, total=False):
 
     # Agent 2 output
     linkedin_output: LinkedInOutput
+
+    # Iteration / refinement (refine_only solo en invoke acortado vía Streamlit / API)
+    refine_only: Optional[bool]
+    user_feedback: Optional[str]
+    refined_output: Optional[LinkedInOutput]
+    iteration_history: List[dict[str, Any]]
 
     # Observability
     logs: List[str]
