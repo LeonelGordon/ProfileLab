@@ -2,6 +2,14 @@ import os
 import tempfile
 import html
 import re
+import sys
+from pathlib import Path
+
+# En Streamlit Community Cloud, asegurar que el root del repo esté en sys.path
+# antes de importar el paquete `app/`.
+_ROOT = str(Path(__file__).resolve().parent)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 import streamlit as st
 import streamlit.components.v1 as components
