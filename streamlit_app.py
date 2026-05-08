@@ -5,11 +5,11 @@ import re
 
 import streamlit as st
 import streamlit.components.v1 as components
-from dotenv import load_dotenv
 
 from app.graph.workflow import build_graph
+from app.config import bootstrap
 
-load_dotenv()
+bootstrap()
 
 
 PROGRESS_STEPS = [
@@ -270,7 +270,6 @@ def scroll_to_anchor(anchor_id: str, delay_ms: int = 120):
 
 st.set_page_config(
     page_title="ProfileLab",
-    page_icon="app/assets/icon.png",
     layout="wide",
 )
 

@@ -6,13 +6,14 @@ from pydantic import BaseModel
 from langchain_groq import ChatGroq
 
 from .base import BaseLLMClient
+from app.config import get_secret
 
 T = TypeVar("T", bound=BaseModel)
 
 
 class GroqClient(BaseLLMClient):
     def __init__(self, model: str = "openai/gpt-oss-20b") -> None:
-        self.api_key = os.getenv("GROQ_API_KEY")
+        self.api_key = get_secret("GROQ_API_KEY", required=True)
 
         if not self.api_key:
             raise ValueError("No se encontró la API Key de Groq (GROQ_API_KEY)")

@@ -1,7 +1,7 @@
 from app.graph.workflow import build_graph
-from dotenv import load_dotenv
+from app.config import bootstrap
 
-load_dotenv()
+bootstrap()
 
 def main():
     graph = build_graph()

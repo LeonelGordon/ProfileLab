@@ -5,13 +5,14 @@ from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
 
 from .base import BaseLLMClient
+from app.config import get_secret
 
 T = TypeVar("T", bound=BaseModel)
 
 
 class OpenAIClient(BaseLLMClient):
     def __init__(self, model: str = "gpt-4o-mini") -> None:
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        self.api_key = get_secret("OPENAI_API_KEY", required=True)
 
         if not self.api_key:
             raise ValueError("No se encontró la API Key de OpenAI (OPENAI_API_KEY)")
